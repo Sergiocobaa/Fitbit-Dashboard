@@ -79,12 +79,7 @@ export default function HeartRateChart({ data }) {
           axisLine={false}
           tickLine={false}
         />
-        <ReferenceLine
-          y={70}
-          stroke="#6b6a7a"
-          strokeDasharray="4 4"
-          label={{ value: 'zona de calma', position: 'insideBottomRight', fontSize: 10, fill: '#6b6a7a' }}
-        />
+        <ReferenceLine y={70} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
         <Tooltip
           contentStyle={{
             background: '#16161f',

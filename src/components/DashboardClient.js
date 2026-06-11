@@ -1,13 +1,39 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import ScoreRing, { scoreColor } from './ScoreRing'
+import ScoreRing from './ScoreRing'
 import MetricCard from './MetricCard'
 import HeartRateChart from './HeartRateChart'
 import SleepStages from './SleepStages'
 import ScoreBreakdown from './ScoreBreakdown'
 
 const MAX_INDEX = 6 // 0 = hoy, 6 = hace 6 días
+
+// iconos de métricas (outline, 16px, strokeWidth 1.5)
+const M_ICONS = {
+  moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
+  waves: <path d="M2 12h2c1 0 1-2 2-2s1 2 2 2 1-2 2-2 1 2 2 2 1-2 2-2 1 2 2 2h2" />,
+  eye: (
+    <>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+}
+
+function MetricIcon({ name }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {M_ICONS[name]}
+    </svg>
+  )
+}
 
 function dateForIndex(i) {
   const d = new Date()
@@ -25,11 +51,14 @@ function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 }
 
-function dayTitle(i, date) {
+function dayTitle(i) {
   if (i === 0) return 'Hoy'
   if (i === 1) return 'Ayer'
-  const s = new Date(`${date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })
-  return s.charAt(0).toUpperCase() + s.slice(1)
+  return null
+}
+
+function dayLongDate(date) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 function daySuffix(i, date) {
@@ -78,25 +107,8 @@ function MiniRing({ title, score, color, label }) {
   return (
     <div className="mini-ring">
       <div className="mini-ring-title">{title}</div>
-      <ScoreRing score={score} size={80} color={color} label={title} />
+      <ScoreRing score={score} size={72} strokeWidth={6} color={color} fontSize={22} fontWeight={700} label={title} />
       <div className="mini-ring-label">{label}</div>
-    </div>
-  )
-}
-
-function updatedLabel(fetchedAt, now) {
-  if (!fetchedAt) return ''
-  const mins = Math.max(0, Math.floor((now - fetchedAt) / 60000))
-  if (mins === 0) return 'Actualizado ahora'
-  if (mins < 60) return `Actualizado hace ${mins} min`
-  return `Actualizado hace ${Math.floor(mins / 60)} h`
-}
-
-function Pill({ label, value, color }) {
-  return (
-    <div className="pill">
-      <span className="pill-label">{label}</span>
-      <span className="pill-value" style={{ color }}>{value}</span>
     </div>
   )
 }
@@ -108,7 +120,6 @@ export default function DashboardClient() {
   const [loadingDate, setLoadingDate] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
-  const [now, setNow] = useState(Date.now())
 
   const date = dateForIndex(dayIndex)
   const entry = cache[date]
@@ -145,10 +156,19 @@ export default function DashboardClient() {
     if (!cache[date] && loadingDate !== date) loadDay(date)
   }, [date, cache, loadingDate, loadDay])
 
+  // guarda el readiness de hoy para que la página de entreno lo etiquete
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30000)
-    return () => clearInterval(id)
-  }, [])
+    if (dayIndex === 0 && data?.readiness?.total != null) {
+      try {
+        localStorage.setItem('lastReadiness', String(data.readiness.total))
+        const map = JSON.parse(localStorage.getItem('readinessByDate') || '{}')
+        map[date] = data.readiness.total
+        localStorage.setItem('readinessByDate', JSON.stringify(map))
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [dayIndex, date, data?.readiness?.total])
 
   // índice de navegación por fecha, para pintar/clicar el selector de tendencia
   const indexByDate = useMemo(() => {
@@ -159,27 +179,63 @@ export default function DashboardClient() {
 
   const readiness = data?.readiness
   const sleep = data?.sleep
+  const hr = data?.heartRate
+  const currentBpm = hr?.length ? hr[hr.length - 1].bpm : null
 
   return (
     <main className="app">
       <header className="header">
         <div className="header-row">
+          <div>
+            <div className="header-sub">{dayLongDate(date)}</div>
+            <div className="header-title-row">
+              <svg className="header-logo" width={32} height={32} viewBox="0 0 200 200" fill="none" aria-hidden>
+                <path d="M 39.38 135 A 70 70 0 1 1 160.62 135" stroke="#ffffff" strokeWidth={6} strokeLinecap="round" fill="none" />
+                <polyline points="45,100 65,100 75,75 85,125 95,88 105,100 155,100" stroke="#ffffff" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              <h1>{dayTitle(dayIndex) ?? daySuffix(dayIndex, date)}</h1>
+            </div>
+          </div>
           <button
-            className="nav-btn"
+            className="refresh-btn"
+            aria-label="Refrescar datos"
+            disabled={refreshing}
+            onClick={() => loadDay(date, { fresh: true })}
+          >
+            <svg className={refreshing ? 'spin' : ''} width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="day-selector">
+          <button
+            className="day-arrow"
             aria-label="Día anterior"
             disabled={dayIndex >= MAX_INDEX}
             onClick={() => setDayIndex(i => Math.min(MAX_INDEX, i + 1))}
           >
             ‹
           </button>
-          <div className="header-date">
-            <h1>{dayTitle(dayIndex, date)}</h1>
-            <div className="header-sub">
-              {new Date(`${date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </div>
+          <div className="day-dots">
+            {(history ?? Array.from({ length: MAX_INDEX + 1 }, () => null)).map((h, i) => {
+              const d = h?.date ?? dateForIndex(MAX_INDEX - i)
+              const idx = indexByDate[d]
+              const hasData = h?.readiness != null
+              const active = idx === dayIndex
+              return (
+                <button
+                  key={d}
+                  className={`day-dot${active ? ' active' : ''}${hasData ? ' has-data' : ''}`}
+                  onClick={() => idx != null && setDayIndex(idx)}
+                  aria-label={`Ver ${d}`}
+                />
+              )
+            })}
           </div>
           <button
-            className="nav-btn"
+            className="day-arrow"
             aria-label="Día siguiente"
             disabled={dayIndex <= 0}
             onClick={() => setDayIndex(i => Math.max(0, i - 1))}
@@ -187,57 +243,33 @@ export default function DashboardClient() {
             ›
           </button>
         </div>
-
-        <div className="header-meta">
-          <span>{updatedLabel(entry?.fetchedAt, now)}</span>
-          <button
-            className="refresh-btn"
-            aria-label="Refrescar datos"
-            disabled={refreshing}
-            onClick={() => loadDay(date, { fresh: true })}
-          >
-            <svg className={refreshing ? 'spin' : ''} width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <path d="M21 3v6h-6" />
-            </svg>
-          </button>
-        </div>
-
-        {history && (
-          <div className="trend-strip">
-            {history.map(h => {
-              const idx = indexByDate[h.date]
-              const initial = new Date(`${h.date}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'narrow' })
-              return (
-                <button
-                  key={h.date}
-                  className={`trend-day${idx === dayIndex ? ' active' : ''}`}
-                  onClick={() => idx != null && setDayIndex(idx)}
-                  aria-label={`Ver ${h.date}`}
-                >
-                  <span>{initial}</span>
-                  <span className="trend-dot" style={{ background: h.readiness != null ? scoreColor(h.readiness) : '#1e1e2a' }} />
-                </button>
-              )
-            })}
-          </div>
-        )}
       </header>
 
       {error && <div className="error-box">Error cargando datos: {error}</div>}
 
       <div key={date} className="day-fade">
-        <section className="card score-card">
+        <section className="card readiness-card">
           {isLoading ? (
             <div className="score-loading"><div className="spinner" /></div>
           ) : (
             <>
-              <ScoreRing score={readiness?.total} />
-              <div className="score-label">{scoreLabel(readiness?.total)}</div>
-              <div className="pill-row">
-                <Pill label="Sleep" value={readiness?.sleepScore ?? '--'} color="#00d4a0" />
-                <Pill label="HRV" value={data?.hrv ? `${data.hrv.avgHRV} ms` : '--'} color="#7c5cbf" />
-                <Pill label="RHR" value={data?.rhr ? `${data.rhr.bpm} bpm` : '--'} color="#4a9eff" />
+              <ScoreRing score={readiness?.total} size={110} strokeWidth={8} fontSize={48} fontWeight={800} />
+              <div className="readiness-label">{scoreLabel(readiness?.total)}</div>
+              <div className="readiness-metrics">
+                <div className="rm-item">
+                  <span className="rm-value">{readiness?.sleepScore ?? '--'}</span>
+                  <span className="rm-label">Sleep</span>
+                </div>
+                <div className="rm-sep" />
+                <div className="rm-item">
+                  <span className="rm-value">{data?.hrv ? data.hrv.avgHRV : '--'}</span>
+                  <span className="rm-label">HRV</span>
+                </div>
+                <div className="rm-sep" />
+                <div className="rm-item">
+                  <span className="rm-value">{data?.rhr ? data.rhr.bpm : '--'}</span>
+                  <span className="rm-label">RHR</span>
+                </div>
               </div>
             </>
           )}
@@ -251,6 +283,7 @@ export default function DashboardClient() {
               color={recoveryColor(data?.sleepRecovery)}
               label={recoveryLabel(data?.sleepRecovery)}
             />
+            <div className="dual-divider" />
             <MiniRing
               title="Esfuerzo"
               score={data?.dailyStrain ?? null}
@@ -261,16 +294,19 @@ export default function DashboardClient() {
         )}
 
         <section className="metric-grid">
-          <MetricCard icon="😴" label="Sueño total" value={fmtHM(sleep?.minutesAsleep)} sub={sleep ? `${fmtTime(sleep.startTime)} – ${fmtTime(sleep.endTime)}` : '--'} color="#00d4a0" />
-          <MetricCard icon="🌊" label="Sueño profundo" value={sleep ? fmtHM(sleep.deep) : '--'} sub={sleep?.minutesAsleep ? `${Math.round((sleep.deep / sleep.minutesAsleep) * 100)}% del total` : '--'} color="#7c5cbf" />
-          <MetricCard icon="🌙" label="REM" value={sleep ? fmtHM(sleep.rem) : '--'} sub={sleep?.minutesAsleep ? `${Math.round((sleep.rem / sleep.minutesAsleep) * 100)}% del total` : '--'} color="#4a9eff" />
-          <MetricCard icon="⏰" label="Interrupciones" value={sleep ? `${sleep.minutesAwake}m` : '--'} sub="despierto durante la noche" color="#e6a23c" />
+          <MetricCard icon={<MetricIcon name="moon" />} label="Sueño total" value={fmtHM(sleep?.minutesAsleep)} sub={sleep ? `${fmtTime(sleep.startTime)} – ${fmtTime(sleep.endTime)}` : '--'} />
+          <MetricCard icon={<MetricIcon name="waves" />} label="Sueño profundo" value={sleep ? fmtHM(sleep.deep) : '--'} sub={sleep?.minutesAsleep ? `${Math.round((sleep.deep / sleep.minutesAsleep) * 100)}% del total` : '--'} />
+          <MetricCard icon={<MetricIcon name="eye" />} label="REM" value={sleep ? fmtHM(sleep.rem) : '--'} sub={sleep?.minutesAsleep ? `${Math.round((sleep.rem / sleep.minutesAsleep) * 100)}% del total` : '--'} />
+          <MetricCard icon={<MetricIcon name="bell" />} label="Interrupciones" value={sleep ? `${sleep.minutesAwake}m` : '--'} sub="despierto de noche" />
         </section>
 
-        {data?.heartRate?.length > 0 && (
+        {hr?.length > 0 && (
           <section className="card">
-            <div className="card-title">Estrés cardiovascular · {daySuffix(dayIndex, date)}</div>
-            <HeartRateChart data={data.heartRate} />
+            <div className="hr-head">
+              <span className="hr-title">FC · {daySuffix(dayIndex, date)}</span>
+              {currentBpm != null && <span className="hr-current">{currentBpm} bpm</span>}
+            </div>
+            <HeartRateChart data={hr} />
           </section>
         )}
 

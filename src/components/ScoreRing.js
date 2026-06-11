@@ -9,11 +9,18 @@ export function scoreColor(score) {
   return '#ff5a5a'
 }
 
-export default function ScoreRing({ score, size = 120, color, label }) {
+export default function ScoreRing({
+  score,
+  size = 110,
+  strokeWidth = 8,
+  color,
+  trackColor = 'rgba(255,255,255,0.06)',
+  fontSize = 48,
+  fontWeight = 800,
+  label,
+}) {
   const ringColor = color ?? scoreColor(score)
-  const strokeWidth = Math.round(size / 12)
-  const r = size / 2 - 8
-  const fontSize = Math.round(size * 0.267)
+  const r = (size - strokeWidth) / 2
   const circ = 2 * Math.PI * r
   // arranca vacío y transiciona hasta el valor → animación de fill al cargar
   const [offset, setOffset] = useState(circ)
@@ -26,7 +33,9 @@ export default function ScoreRing({ score, size = 120, color, label }) {
 
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label={`${label ?? 'Readiness'} ${score ?? 'sin datos'}`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1e1e2a" strokeWidth={strokeWidth} />
+      {/* track sin linecap redondeado */}
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
+      {/* fill con linecap redondeado */}
       <circle
         cx={size / 2} cy={size / 2} r={r}
         fill="none"
@@ -38,7 +47,11 @@ export default function ScoreRing({ score, size = 120, color, label }) {
         transform={`rotate(-90 ${size / 2} ${size / 2})`}
         style={{ transition: 'stroke-dashoffset 0.8s ease' }}
       />
-      <text x={size / 2} y={size / 2 + fontSize / 3} textAnchor="middle" fontSize={fontSize} fontWeight={700} fill={ringColor}>
+      <text
+        x={size / 2} y={size / 2}
+        textAnchor="middle" dominantBaseline="central"
+        fontSize={fontSize} fontWeight={fontWeight} fill="#f0eff4"
+      >
         {score ?? '--'}
       </text>
     </svg>
