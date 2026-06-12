@@ -5,12 +5,16 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "next": "^16.2.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.1"
   }
 }
