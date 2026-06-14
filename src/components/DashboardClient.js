@@ -293,6 +293,14 @@ export default function DashboardClient() {
           </section>
         )}
 
+        {!isLoading && (readiness?.baseline?.hrvMean != null || readiness?.baseline?.rhrMean != null) && (
+          <div className="baseline-note">
+            {readiness.baseline.hrvMean != null && <>Tu HRV media: {readiness.baseline.hrvMean} ms</>}
+            {readiness.baseline.hrvMean != null && readiness.baseline.rhrMean != null && ' · '}
+            {readiness.baseline.rhrMean != null && <>FC reposo media: {readiness.baseline.rhrMean} bpm</>}
+          </div>
+        )}
+
         <section className="metric-grid">
           <MetricCard icon={<MetricIcon name="moon" />} label="Sueño total" value={fmtHM(sleep?.minutesAsleep)} sub={sleep ? `${fmtTime(sleep.startTime)} – ${fmtTime(sleep.endTime)}` : '--'} />
           <MetricCard icon={<MetricIcon name="waves" />} label="Sueño profundo" value={sleep ? fmtHM(sleep.deep) : '--'} sub={sleep?.minutesAsleep ? `${Math.round((sleep.deep / sleep.minutesAsleep) * 100)}% del total` : '--'} />

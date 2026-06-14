@@ -9,18 +9,19 @@ function localDate(startTime, utcOffset) {
   return shifted.toISOString().split('T')[0]
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     const token = await getAccessToken()
 
-    const since = new Date()
-    since.setDate(since.getDate() - 30)
-    const filterDate = since.toISOString().split('T')[0]
+    // periodo dinámico: ?days=7 | 30 | 90 (por defecto 30)
+    const { searchParams } = new URL(request.url)
+    const days = Math.min(366, Math.max(1, parseInt(searchParams.get('days')) || 30))
 
-    const url =
-      `${HEALTH_BASE}/dataTypes/exercise/dataPoints:reconcile` +
-      `?dataSourceFamily=users/me/dataSourceFamilies/google-wearables` +
-      `&filter=exercise.interval.civil_start_time >= "${filterDate}"`
+    const date30DaysAgo = new Date()
+    date30DaysAgo.setDate(date30DaysAgo.getDate() - 30)
+    const startDate = date30DaysAgo.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' })
+
+    const url = `https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints:reconcile?filter=exercise.interval.civil_start_time >= "${startDate}"`
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
