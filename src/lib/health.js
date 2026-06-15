@@ -118,32 +118,35 @@ export async function getRHRForDate(token, dateStr, fresh = false) {
 // FC intradiaria muestreada en cubos de 15 min: [{ mins, bpm }] con mins desde medianoche (Madrid)
 export async function getHeartRateSeries(token, dateStr, fresh = false) {
   const off = madridOffset(dateStr)
-  const offsetHours = parseInt(off.split(':')[0])
-  
-  // Convertir medianoche Madrid → UTC restando el offset
-  const prevDay = new Date(`${dateStr}T00:00:00Z`)
-  prevDay.setHours(prevDay.getHours() - offsetHours)
-  const startUTC = prevDay.toISOString().replace('.000Z', 'Z')
-  
-  const endDay = new Date(`${dateStr}T00:00:00Z`)
-  endDay.setHours(endDay.getHours() - offsetHours + 24)
-  const endUTC = endDay.toISOString().replace('.000Z', 'Z')
 
-  const dayStart = new Date(`${dateStr}T00:00:00${off}`).getTime()
+  // Medianoche de dateStr en Madrid → UTC
+  const dayStartMadrid = new Date(`${dateStr}T00:00:00${off}`)
+  const dayStartUTC = dayStartMadrid.toISOString()
+
+  // Fin del día en Madrid → UTC
+  const dayEndMadrid = new Date(`${dateStr}T23:59:59${off}`)
+  const dayEndUTC = dayEndMadrid.toISOString()
+
+  // Para el filtro UTC: medianoche Madrid = UTC - offset
+  const startUTC = dayStartUTC.replace('.000Z', 'Z')
+  const endUTC = dayEndUTC.replace('.000Z', 'Z')
+
+  const dayStartMs = dayStartMadrid.getTime()
   const buckets = new Map()
   let pageToken = null
 
   do {
     const base = `/dataTypes/heart-rate/dataPoints?filter=heart_rate.sample_time.physical_time >= "${startUTC}" AND heart_rate.sample_time.physical_time < "${endUTC}"&pageSize=10000`
     const qs = pageToken ? `${base}&pageToken=${pageToken}` : base
-    const data = await healthFetch(qs, token, fresh)
+    const data = await healthFetch(qs, token, true) // siempre fresh, no cachear FC
     pageToken = data.nextPageToken || null
 
     for (const p of data.dataPoints || []) {
       const bpm = parseFloat(p.heartRate?.beatsPerMinute)
       const t = new Date(p.heartRate?.sampleTime?.physicalTime || 0).getTime()
       if (!bpm || !t) continue
-      const mins = Math.floor((t - dayStart) / 60000)
+      // mins desde medianoche de dateStr en Madrid
+      const mins = Math.floor((t - dayStartMs) / 60000)
       if (mins < 0 || mins > 1439) continue
       const slot = Math.floor(mins / 15) * 15
       const b = buckets.get(slot) || { sum: 0, n: 0 }
@@ -566,6 +569,14 @@ export function calcDailyStrain({ heartRate, rhr, age = 20, sleep }) {
   const duringSleepNight = sleepStart !== null && mins >= sleepStart
   if (duringSleepMorning || duringSleepNight) continue
 
+  console.log('STRAIN DEBUG:', {
+    totalBuckets: heartRate.length,
+    rawStrain,
+    final: Math.min(100, Math.round((rawStrain / 130) * 100)),
+    sleepStart,
+    sleepEnd,
+    sampleBuckets: heartRate.slice(0, 3)
+  })
   const pct = (bpm - hrRest) / hrReserve
   if (pct < 0.30) continue          // zona 1 ignorada completamente
   else if (pct < 0.50) rawStrain += 15 * 1.0
