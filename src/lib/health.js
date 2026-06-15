@@ -119,26 +119,27 @@ export async function getRHRForDate(token, dateStr, fresh = false) {
 export async function getHeartRateSeries(token, dateStr, fresh = false) {
   const off = madridOffset(dateStr)
 
-  // Medianoche de dateStr en Madrid → UTC
+  // Medianoche y fin de dateStr en Madrid
   const dayStartMadrid = new Date(`${dateStr}T00:00:00${off}`)
-  const dayStartUTC = dayStartMadrid.toISOString()
-
-  // Fin del día en Madrid → UTC
   const dayEndMadrid = new Date(`${dateStr}T23:59:59${off}`)
-  const dayEndUTC = dayEndMadrid.toISOString()
 
   // Para el filtro UTC: medianoche Madrid = UTC - offset
-  const startUTC = dayStartUTC.replace('.000Z', 'Z')
-  const endUTC = dayEndUTC.replace('.000Z', 'Z')
+  const startUTC = dayStartMadrid.toISOString().slice(0, 19) + 'Z'
+  const endUTC = dayEndMadrid.toISOString().slice(0, 19) + 'Z'
 
   const dayStartMs = dayStartMadrid.getTime()
   const buckets = new Map()
   let pageToken = null
 
   do {
-    const base = `/dataTypes/heart-rate/dataPoints?filter=heart_rate.sample_time.physical_time >= "${startUTC}" AND heart_rate.sample_time.physical_time < "${endUTC}"&pageSize=10000`
-    const qs = pageToken ? `${base}&pageToken=${pageToken}` : base
-    const data = await healthFetch(qs, token, true) // siempre fresh, no cachear FC
+    const base = `${HEALTH_BASE}/dataTypes/heart-rate/dataPoints?filter=heart_rate.sample_time.physical_time >= "${startUTC}" AND heart_rate.sample_time.physical_time < "${endUTC}"&pageSize=10000`
+    const url = pageToken ? `${base}&pageToken=${pageToken}` : base
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store'
+    })
+    if (!res.ok) break
+    const data = await res.json()
     pageToken = data.nextPageToken || null
 
     for (const p of data.dataPoints || []) {
@@ -186,8 +187,11 @@ export async function getExerciseDetail(token, id) {
     `/dataTypes/exercise/dataPoints:reconcile?dataSourceFamily=users/me/dataSourceFamilies/google-wearables&filter=exercise.interval.civil_start_time >= "${filterDate}"`,
     token, true
   )
+  const decodedId = decodeURIComponent(id)
   const point = (exData.dataPoints || []).find(
-    p => (p.name || p.exercise?.interval?.startTime) === id
+    p => p.name === decodedId
+      || p.dataPointName === decodedId
+      || p.exercise?.interval?.startTime === decodedId
   )
   if (!point?.exercise?.interval?.startTime) return null
 
@@ -323,8 +327,7 @@ export async function getDayData(token, dateStr, fresh = false) {
   const readiness = calcReadinessScore({ sleep, hrv, rhr, baseline })
   const sleepRecovery = calcSleepRecovery({ sleep, hrv, rhr, heartRate, baseline })
   const dailyStrain = calcDailyStrain({ heartRate, rhr, age: 20, sleep })
-
-
+ 
   return { sleep, hrv, rhr, heartRate, readiness, sleepRecovery, dailyStrain, baseline }
 }
 
@@ -553,38 +556,33 @@ export function calcDailyStrain({ heartRate, rhr, age = 20, sleep }) {
   const hrRest = rhr?.bpm || 64
   const hrReserve = hrMax - hrRest
 
-  // El sueño cruza medianoche: startTime es del día anterior (>1200 mins)
-  // endTime es del día actual (<600 mins)
-  // Excluir buckets ANTES de sleepEnd (mañana) y DESPUÉS de sleepStart (noche)
+  // Solo excluir el período de sueño: desde el inicio hasta el final
+  // El sueño cruza medianoche, así que en el array de FC del día actual
+  // los buckets de madrugada (0 a sleepEnd) son de sueño
   const sleepEnd = sleep
     ? Math.floor((new Date(sleep.endTime).getTime() - new Date(sleep.endTime.split('T')[0] + 'T00:00:00+02:00').getTime()) / 60000)
     : null
-  const sleepStart = sleep
+
+  // Para el inicio del sueño nocturno: solo excluir si es después de las 20:00 (min > 1200)
+  // Si empieza antes de las 20:00 significa que el sueño ya está cubierto por sleepEnd
+  const sleepStartRaw = sleep
     ? Math.floor((new Date(sleep.startTime).getTime() - new Date(sleep.startTime.split('T')[0] + 'T00:00:00+02:00').getTime()) / 60000)
     : null
+  const sleepStart = sleepStartRaw !== null && sleepStartRaw > 1200 ? sleepStartRaw : null
 
   let rawStrain = 0
   for (const { bpm, mins } of heartRate) {
-  const duringSleepMorning = sleepEnd !== null && mins <= sleepEnd
-  const duringSleepNight = sleepStart !== null && mins >= sleepStart
-  if (duringSleepMorning || duringSleepNight) continue
+    const duringSleepMorning = sleepEnd !== null && mins <= sleepEnd
+    const duringSleepNight = sleepStart !== null && mins >= sleepStart
+    if (duringSleepMorning || duringSleepNight) continue
 
-  console.log('STRAIN DEBUG:', {
-    totalBuckets: heartRate.length,
-    rawStrain,
-    final: Math.min(100, Math.round((rawStrain / 130) * 100)),
-    sleepStart,
-    sleepEnd,
-    sampleBuckets: heartRate.slice(0, 3)
-  })
-  const pct = (bpm - hrRest) / hrReserve
-  if (pct < 0.30) continue          // zona 1 ignorada completamente
-  else if (pct < 0.50) rawStrain += 15 * 1.0
-  else if (pct < 0.70) rawStrain += 15 * 2.5
-  else if (pct < 0.85) rawStrain += 15 * 4.0
-  else rawStrain += 15 * 6.0
-}
+    const pct = (bpm - hrRest) / hrReserve
+    if (pct < 0.30) continue
+    else if (pct < 0.50) rawStrain += 15 * 1.0
+    else if (pct < 0.70) rawStrain += 15 * 2.5
+    else if (pct < 0.85) rawStrain += 15 * 4.0
+    else rawStrain += 15 * 6.0
+  }
 
-
-return Math.min(100, Math.round((rawStrain / 130) * 100))
+  return Math.min(100, Math.round((rawStrain / 130) * 100))
 }

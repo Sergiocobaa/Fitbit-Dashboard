@@ -84,8 +84,8 @@ export default function WorkoutClient() {
         </div>
       ) : (
         <div className="exercise-list">
-          {exercises.map(e => (
-            <Link key={e.id} href={`/workout/${e.id}`} className="exercise-card">
+          {exercises.map((e, i) => (
+            <Link key={`${e.id || e.startTime}-${i}`} href={`/workout/${e.id}`} className="exercise-card">
               <div className="exercise-left">
                 <div className="exercise-name">{e.name}</div>
                 <div className="exercise-meta">{typeName(e.type)}</div>
