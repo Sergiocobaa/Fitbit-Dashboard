@@ -1,9 +1,10 @@
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
+import NotificationManager from '@/components/NotificationManager'
 
 export const metadata = {
   title: 'Mi dashboard de salud',
-  description: 'Dashboard personal de Fitbit Air con datos de Google Health API',
+  description: 'Dashboard personal de Fitbit con datos de Google Health API',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -17,13 +18,14 @@ export const metadata = {
 }
 
 export const viewport = {
-  themeColor: '#08080f',
+  themeColor: '#080c14',
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <body>
+        <NotificationManager />
         {children}
         <BottomNav />
       </body>

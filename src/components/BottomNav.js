@@ -5,9 +5,13 @@ import { usePathname } from 'next/navigation'
 
 const ICONS = {
   today: (
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10" />
+  ),
+  health: (
     <>
-      <circle cx="12" cy="12" r="8.5" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+      <line x1="8" y1="21" x2="16" y2="21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
     </>
   ),
   workout: <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
@@ -16,10 +20,8 @@ const ICONS = {
 }
 
 const TABS = [
-  { href: '/dashboard', label: 'Hoy', icon: 'today' },
-  { href: '/workout', label: 'Entreno', icon: 'workout' },
-  { href: '/sleep', label: 'Sueño', icon: 'sleep' },
-  { href: '/trends', label: 'Tendencias', icon: 'trends' },
+  { href: '/dashboard', label: 'Home', icon: 'today' },
+  { href: '/sleep', label: 'Health', icon: 'health' },
 ]
 
 export default function BottomNav() {
@@ -37,7 +39,16 @@ export default function BottomNav() {
               className={`nav-tab${active ? ' active' : ''}`}
               aria-current={active ? 'page' : undefined}
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 {ICONS[tab.icon]}
               </svg>
               <span className="nav-tab-label">{tab.label}</span>
