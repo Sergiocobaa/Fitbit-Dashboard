@@ -8,6 +8,7 @@ import SleepStages from './SleepStages'
 import ScoreBreakdown from './ScoreBreakdown'
 import { useSleepNotification } from './NotificationManager'
 import { BaselinePill } from './BaselineDelta'
+import { useRouter } from 'next/navigation'
 
 // Clave de caché en localStorage — cambia si cambian los datos
 function insightCacheKey(date, readiness, hrv) {
@@ -195,6 +196,7 @@ function WhoopRing({ label, score, color, displayValue, unit }) {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export default function DashboardClient() {
+  const router = useRouter()
   const [dayIndex, setDayIndex] = useState(0)
   const [cache, setCache] = useState({})
   const [history, setHistory] = useState(null)
@@ -591,6 +593,38 @@ export default function DashboardClient() {
             <div className="section-header">
               <h2 className="section-heading">Mi Día</h2>
             </div>
+
+            {/* Tarjeta de Estrés */}
+            {data?.dailyStress?.score != null && (
+              <div 
+                className="card" 
+                style={{ marginBottom: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}
+                onClick={() => router.push('/stress')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <ScoreRing 
+                    score={data.dailyStress.score} 
+                    size={46} 
+                    strokeWidth={4.5} 
+                    color={data.dailyStress.score < 33 ? '#34c759' : data.dailyStress.score < 66 ? '#ffcc00' : '#ff3b30'} 
+                    fontSize={15} 
+                    fontWeight={800} 
+                  />
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '0.02em', marginBottom: 2 }}>Estrés</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#8e8e93' }}>
+                      {data.dailyStress.score < 33 ? 'Bajo' : data.dailyStress.score < 66 ? 'Medio' : 'Alto'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ color: '#8e8e93' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
+              </div>
+            )}
+
             <div className="card">
               <div className="activities-inner-label">Actividades de hoy</div>
 

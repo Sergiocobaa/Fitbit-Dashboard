@@ -327,8 +327,9 @@ export async function getDayData(token, dateStr, fresh = false) {
   const readiness = calcReadinessScore({ sleep, hrv, rhr, baseline })
   const sleepRecovery = calcSleepRecovery({ sleep, hrv, rhr, heartRate, baseline })
   const dailyStrain = calcDailyStrain({ heartRate, rhr, age: 20, sleep })
+  const dailyStress = calcDailyStress({ heartRate, rhr, sleep })
  
-  return { sleep, hrv, rhr, heartRate, readiness, sleepRecovery, dailyStrain, baseline }
+  return { sleep, hrv, rhr, heartRate, readiness, sleepRecovery, dailyStrain, dailyStress, baseline }
 }
 
 // Scores de los últimos 7 días (incluido hoy) para el selector de días
@@ -599,4 +600,76 @@ export function calcDailyStrain({ heartRate, rhr, age = 20, sleep }) {
 
   // Ya no usamos divisor de 60, rawStrain acumula directamente puntos porcentuales
   return Math.min(100, Math.round(rawStrain))
-}
+}
+
+// ── Estrés Diario (Heurística basada en FC) ──────────────────────────────────
+// Calcula el estrés a lo largo del día basado en la elevación de la FC vs Reposo
+// excluyendo los periodos de sueño y de ejercicio intenso.
+export function calcDailyStress({ heartRate, rhr, sleep }) {
+  if (!heartRate?.length) return null
+
+  const hrRest = rhr?.bpm || 64
+  let stressSum = 0
+  let stressCount = 0
+  const stressSeries = []
+
+  const sleepEnd = sleep
+    ? Math.floor((new Date(sleep.endTime).getTime() - new Date(sleep.endTime.split('T')[0] + 'T00:00:00+02:00').getTime()) / 60000)
+    : null
+
+  const sleepStartRaw = sleep
+    ? Math.floor((new Date(sleep.startTime).getTime() - new Date(sleep.startTime.split('T')[0] + 'T00:00:00+02:00').getTime()) / 60000)
+    : null
+  const sleepStart = sleepStartRaw !== null && sleepStartRaw > 1200 ? sleepStartRaw : null
+
+  for (let i = 0; i < 1440; i += 15) {
+    const point = heartRate.find(p => p.mins === i)
+    const isSleep = (sleepEnd !== null && i <= sleepEnd) || (sleepStart !== null && i >= sleepStart)
+
+    const timeLabel = `${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}`
+
+    if (!point) {
+      stressSeries.push({ time: timeLabel, value: null, isSleep })
+      continue
+    }
+
+    const bpm = point.bpm
+    let stressVal = 0
+
+    if (isSleep) {
+      // Menos estrés durante el sueño: de 0 a 30 aprox
+      const diff = bpm - (hrRest - 10) 
+      stressVal = Math.max(0, Math.min(100, diff * 2))
+    } else {
+      const hrReserve = 194 - hrRest // FCmax genérica 194
+      const pct = (bpm - hrRest) / hrReserve
+      
+      if (pct > 0.40) {
+        // Ejercicio -> No es "estrés", lo marcamos nulo o lo capeamos
+        stressVal = null
+      } else {
+        // Mapeamos el % de elevación de FC a una escala 0-100 de estrés
+        // pct 0.0 (reposo) -> ~10
+        // pct 0.20 (~90bpm) -> ~60
+        // pct 0.40 (~115bpm) -> ~100
+        stressVal = Math.min(100, Math.max(0, 10 + (pct / 0.35) * 90))
+      }
+    }
+
+    const roundedVal = stressVal !== null ? Math.round(stressVal) : null
+    stressSeries.push({ time: timeLabel, value: roundedVal, isSleep })
+
+    if (roundedVal !== null && !isSleep) {
+      stressSum += roundedVal
+      stressCount++
+    }
+  }
+
+  const score = stressCount > 0 ? Math.round(stressSum / stressCount) : 0
+
+  return {
+    score,
+    series: stressSeries
+  }
+}
+
