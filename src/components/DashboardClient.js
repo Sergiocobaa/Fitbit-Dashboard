@@ -8,6 +8,11 @@ import SleepStages from './SleepStages'
 import ScoreBreakdown from './ScoreBreakdown'
 import { useSleepNotification } from './NotificationManager'
 
+// Clave de caché en localStorage — cambia si cambian los datos
+function insightCacheKey(date, readiness, hrv) {
+  return `ai_insight_${date}_r${readiness?.total ?? 'x'}_h${hrv?.avgHRV ?? 'x'}`
+}
+
 const MAX_INDEX = 6
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
@@ -191,6 +196,11 @@ export default function DashboardClient() {
   const [notifDismissed, setNotifDismissed] = useState(false)
   const notifBannerShown = useRef(false)
 
+  // —— Estado del insight de IA ——
+  const [aiInsight, setAiInsight] = useState(null)    // { title, body, tip }
+  const [aiLoading, setAiLoading] = useState(false)
+  const lastAiKey = useRef(null)
+
   const notifySleep = useSleepNotification()
 
   const date = dateForIndex(dayIndex)
@@ -253,6 +263,53 @@ export default function DashboardClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.sleep, date, dayIndex])
 
+  // 🧠 Análisis IA — solo cuando hay datos nuevos, con caché localStorage
+  useEffect(() => {
+    if (!data?.sleep && !data?.readiness) return
+
+    const cacheKey = insightCacheKey(date, data?.readiness, data?.hrv)
+    if (cacheKey === lastAiKey.current) return // ya lo tenemos en estado
+
+    // Buscar en caché de localStorage primero (evita llamadas repetidas)
+    try {
+      const cached = localStorage.getItem(cacheKey)
+      if (cached) {
+        setAiInsight(JSON.parse(cached))
+        lastAiKey.current = cacheKey
+        return
+      }
+    } catch { /* ignore */ }
+
+    // No hay caché → llamar a la API
+    setAiLoading(true)
+    setAiInsight(null)
+
+    fetch('/api/ai-insight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date,
+        sleep: data.sleep,
+        readiness: data.readiness,
+        hrv: data.hrv,
+        rhr: data.rhr,
+      }),
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (json.title) {
+          const insight = { title: json.title, body: json.body, tip: json.tip }
+          setAiInsight(insight)
+          lastAiKey.current = cacheKey
+          try { localStorage.setItem(cacheKey, JSON.stringify(insight)) } catch { /* ignore */ }
+        }
+        // Si falla la IA, aiInsight queda null → usa buildInsight() estático
+      })
+      .catch(() => { /* red fallback silencioso */ })
+      .finally(() => setAiLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.sleep, data?.readiness, data?.hrv, date])
+
   const indexByDate = useMemo(() => {
     const m = {}
     for (let i = 0; i <= MAX_INDEX; i++) m[dateForIndex(i)] = i
@@ -263,7 +320,9 @@ export default function DashboardClient() {
   const sleep = data?.sleep
   const hr = data?.heartRate
   const currentBpm = hr?.length ? hr[hr.length - 1].bpm : null
-  const insight = buildInsight(data)
+
+  // Usar análisis de IA si está disponible, si no el fallback estático
+  const insight = aiInsight ?? buildInsight(data)
 
   // Métricas Health Monitor
   const healthMetrics = [
@@ -399,11 +458,31 @@ export default function DashboardClient() {
         {!isLoading && (
           <div className="insight-card">
             <div className="insight-text">
-              <p className="insight-title">{insight.title}</p>
-              <p className="insight-body">{insight.body}</p>
-              <button className="insight-explore-btn">
-                EXPLORAR DETALLES →
-              </button>
+              {aiLoading ? (
+                // Shimmer de carga mientras OpenAI responde
+                <>
+                  <div style={{ height: 16, width: '70%', borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 8, animation: 'pulse 1.4s ease infinite' }} />
+                  <div style={{ height: 12, width: '100%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', marginBottom: 6, animation: 'pulse 1.4s ease 0.1s infinite' }} />
+                  <div style={{ height: 12, width: '80%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', marginBottom: 6, animation: 'pulse 1.4s ease 0.2s infinite' }} />
+                  <div style={{ height: 12, width: '60%', borderRadius: 6, background: 'rgba(255,255,255,0.04)', animation: 'pulse 1.4s ease 0.3s infinite' }} />
+                </>
+              ) : (
+                <>
+                  <p className="insight-title">
+                    {aiInsight && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 6 }}>IA •</span>}
+                    {insight.title}
+                  </p>
+                  <p className="insight-body">{insight.body}</p>
+                  {aiInsight?.tip && (
+                    <p style={{ margin: '0 0 10px', fontSize: 11, color: 'var(--green)', fontWeight: 500 }}>
+                      💡 {aiInsight.tip}
+                    </p>
+                  )}
+                  <button className="insight-explore-btn">
+                    EXPLORAR DETALLES →
+                  </button>
+                </>
+              )}
             </div>
             <div className="insight-badge">
               <span className="insight-badge-check">✓</span>
