@@ -7,10 +7,19 @@ import HeartRateChart from './HeartRateChart'
 import SleepStages from './SleepStages'
 import ScoreBreakdown from './ScoreBreakdown'
 import { useSleepNotification } from './NotificationManager'
+import { BaselinePill } from './BaselineDelta'
 
 // Clave de caché en localStorage — cambia si cambian los datos
 function insightCacheKey(date, readiness, hrv) {
   return `ai_insight_${date}_r${readiness?.total ?? 'x'}_h${hrv?.avgHRV ?? 'x'}`
+}
+
+// Número de semana ISO (para caché del resumen semanal)
+function isoWeek() {
+  const d = new Date()
+  const jan4 = new Date(d.getFullYear(), 0, 4)
+  const oneDay = 86400000
+  return Math.ceil(((d - jan4) / oneDay + jan4.getDay() + 1) / 7)
 }
 
 const MAX_INDEX = 6
@@ -194,11 +203,13 @@ export default function DashboardClient() {
   const [error, setError] = useState(null)
   const [showToast, setShowToast] = useState(false)
   const [notifDismissed, setNotifDismissed] = useState(false)
+  const [showNotifBanner, setShowNotifBanner] = useState(false)
   const notifBannerShown = useRef(false)
 
   // —— Estado del insight de IA ——
-  const [aiInsight, setAiInsight] = useState(null)    // { title, body, tip }
+  const [aiInsight, setAiInsight] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [weeklyInsight, setWeeklyInsight] = useState(null) // resumen semanal (lunes)
   const lastAiKey = useRef(null)
 
   const notifySleep = useSleepNotification()
@@ -310,6 +321,40 @@ export default function DashboardClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.sleep, data?.readiness, data?.hrv, date])
 
+  // 📅 Resumen semanal IA (sólo lunes, con caché por número de semana)
+  useEffect(() => {
+    const today = new Date()
+    const isMonday = today.getDay() === 1
+    if (!isMonday || dayIndex !== 0) return
+
+    const weekKey = `weekly_insight_${today.getFullYear()}_w${isoWeek()}`
+    try {
+      const cached = localStorage.getItem(weekKey)
+      if (cached) { setWeeklyInsight(JSON.parse(cached)); return }
+    } catch { /* ignore */ }
+
+    fetch('/api/health/trends?period=7')
+      .then(r => r.json())
+      .then(json => {
+        if (!json.days?.length) return null
+        return fetch('/api/ai-insight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'weekly', days: json.days, baseline: json.baseline }),
+        })
+      })
+      .then(r => r?.json())
+      .then(json => {
+        if (json?.title) {
+          const insight = { title: json.title, body: json.body, tip: json.tip, weekly: true }
+          setWeeklyInsight(insight)
+          try { localStorage.setItem(weekKey, JSON.stringify(insight)) } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayIndex])
+
   const indexByDate = useMemo(() => {
     const m = {}
     for (let i = 0; i <= MAX_INDEX; i++) m[dateForIndex(i)] = i
@@ -321,8 +366,9 @@ export default function DashboardClient() {
   const hr = data?.heartRate
   const currentBpm = hr?.length ? hr[hr.length - 1].bpm : null
 
-  // Usar análisis de IA si está disponible, si no el fallback estático
-  const insight = aiInsight ?? buildInsight(data)
+  // Usar insight semanal (lunes) > IA diaria > fallback estático
+  const insight = weeklyInsight ?? aiInsight ?? buildInsight(data)
+  const isWeekly = !!weeklyInsight
 
   // Métricas Health Monitor
   const healthMetrics = [
@@ -334,13 +380,14 @@ export default function DashboardClient() {
   const metricsInRange = healthMetrics.length
   const totalMetrics = Math.max(metricsInRange, 3)
 
-  // Notif banner: mostrar si no tenemos permiso aún
-  const showNotifBanner =
-    !notifDismissed &&
-    !isLoading &&
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    Notification.permission === 'default'
+  // Notif banner: comprobar permiso solo en cliente (evita hydration error)
+  useEffect(() => {
+    if (!notifDismissed && !isLoading && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      setShowNotifBanner(true)
+    } else {
+      setShowNotifBanner(false)
+    }
+  }, [notifDismissed, isLoading])
 
   return (
     <main className="app">
@@ -469,7 +516,8 @@ export default function DashboardClient() {
               ) : (
                 <>
                   <p className="insight-title">
-                    {aiInsight && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 6 }}>IA •</span>}
+                    {isWeekly && <span className="weekly-badge">Semana</span>}
+                    {!isWeekly && aiInsight && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 6 }}>IA •</span>}
                     {insight.title}
                   </p>
                   <p className="insight-body">{insight.body}</p>
@@ -512,6 +560,28 @@ export default function DashboardClient() {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
+          </div>
+        )}
+
+        {/* Comparativa vs. baseline — flechas debajo del health monitor */}
+        {!isLoading && (data?.hrv?.avgHRV != null || data?.rhr?.bpm != null) && readiness?.baseline && (
+          <div style={{ display: 'flex', gap: 8, marginTop: -6, marginBottom: 12, flexWrap: 'wrap' }}>
+            {data.hrv?.avgHRV != null && readiness.baseline.hrvMean && (
+              <BaselinePill
+                value={data.hrv.avgHRV}
+                baseline={readiness.baseline.hrvMean}
+                higherIsBetter={true}
+                label={`HRV: ${data.hrv.avgHRV}ms ${data.hrv.avgHRV > readiness.baseline.hrvMean ? '↑' : data.hrv.avgHRV < readiness.baseline.hrvMean ? '↓' : '='} ${Math.abs(Math.round(((data.hrv.avgHRV - readiness.baseline.hrvMean) / readiness.baseline.hrvMean) * 100))}% vs. media`}
+              />
+            )}
+            {data.rhr?.bpm != null && readiness.baseline.rhrMean && (
+              <BaselinePill
+                value={data.rhr.bpm}
+                baseline={readiness.baseline.rhrMean}
+                higherIsBetter={false}
+                label={`RHR: ${data.rhr.bpm}bpm ${data.rhr.bpm < readiness.baseline.rhrMean ? '↓' : data.rhr.bpm > readiness.baseline.rhrMean ? '↑' : '='} ${Math.abs(Math.round(((data.rhr.bpm - readiness.baseline.rhrMean) / readiness.baseline.rhrMean) * 100))}% vs. media`}
+              />
+            )}
           </div>
         )}
 

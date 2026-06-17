@@ -9,19 +9,18 @@ const ICONS = {
   ),
   health: (
     <>
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-      <line x1="8" y1="21" x2="16" y2="21" />
-      <line x1="12" y1="17" x2="12" y2="21" />
+      <polyline points="22 12 18 12 15 20 9 4 6 12 2 12" />
     </>
   ),
-  workout: <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
-  sleep: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
-  trends: <polyline points="22 12 18 12 15 20 9 4 6 12 2 12" />,
+  trends: (
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+  ),
 }
 
 const TABS = [
-  { href: '/dashboard', label: 'Home', icon: 'today' },
-  { href: '/sleep', label: 'Health', icon: 'health' },
+  { href: '/dashboard', label: 'Home',       icon: 'today'   },
+  { href: '/sleep',     label: 'Health',     icon: 'health'  },
+  { href: '/trends',    label: 'Tendencias', icon: 'trends'  },
 ]
 
 export default function BottomNav() {

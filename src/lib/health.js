@@ -542,15 +542,22 @@ export function calcSleepRecovery({ sleep, hrv, rhr, heartRate, baseline }) {
       remScore         * 0.04    // bajado de 0.08
   )
 
-
-
   return result
 }
 
 // Anillo de Esfuerzo Diario: carga cardiovascular del día a partir de la FC intradiaria.
 // Metodología de zonas de entrenamiento (Firstbeat/Garmin) con FCmax de Tanaka.
+//
+// Zonas por % de FC de reserva (Karvonen):
+//   < 0.05  → en reposo total (sedentario)
+//   0.05-0.20 → actividad muy ligera (caminar despacio, tareas del hogar)  ← mall walk aquí
+//   0.20-0.40 → baja intensidad (caminar rápido, ciclismo suave)
+//   0.40-0.60 → moderada (trote, bici)
+//   0.60-0.75 → intensa (carrera, cardio)
+//   0.75-0.88 → muy intensa (HIIT, umbral)
+//   > 0.88   → máxima (sprint)
 export function calcDailyStrain({ heartRate, rhr, age = 20, sleep }) {
-  if (!heartRate?.length) return null
+  if (!heartRate?.length) return 0
 
   const hrMax = 208 - 0.7 * age
   const hrRest = rhr?.bpm || 64
@@ -564,25 +571,32 @@ export function calcDailyStrain({ heartRate, rhr, age = 20, sleep }) {
     : null
 
   // Para el inicio del sueño nocturno: solo excluir si es después de las 20:00 (min > 1200)
-  // Si empieza antes de las 20:00 significa que el sueño ya está cubierto por sleepEnd
   const sleepStartRaw = sleep
     ? Math.floor((new Date(sleep.startTime).getTime() - new Date(sleep.startTime.split('T')[0] + 'T00:00:00+02:00').getTime()) / 60000)
     : null
   const sleepStart = sleepStartRaw !== null && sleepStartRaw > 1200 ? sleepStartRaw : null
 
   let rawStrain = 0
+  let activePoints = 0
   for (const { bpm, mins } of heartRate) {
     const duringSleepMorning = sleepEnd !== null && mins <= sleepEnd
     const duringSleepNight = sleepStart !== null && mins >= sleepStart
     if (duringSleepMorning || duringSleepNight) continue
 
+    activePoints++
     const pct = (bpm - hrRest) / hrReserve
-    if (pct < 0.30) continue
-    else if (pct < 0.50) rawStrain += 15 * 1.0
-    else if (pct < 0.70) rawStrain += 15 * 2.5
-    else if (pct < 0.85) rawStrain += 15 * 4.0
-    else rawStrain += 15 * 6.0
+    
+    // Zonas calibradas para que un paseo de 2h de ~20-25% y 1h de running de ~70-80%
+    if      (pct < 0.12) continue                  // sedentario/reposo (< 80 bpm) — no suma
+    else if (pct < 0.25) rawStrain += 15 * 0.15    // muy ligera (mall walk) -> 2.25 pts por bucket
+    else if (pct < 0.40) rawStrain += 15 * 0.50    // ligera (caminar rápido) -> 7.5 pts
+    else if (pct < 0.60) rawStrain += 15 * 1.00    // moderada (trote) -> 15 pts
+    else if (pct < 0.80) rawStrain += 15 * 1.80    // intensa (carrera) -> 27 pts
+    else                 rawStrain += 15 * 3.00    // máxima -> 45 pts
   }
 
-  return Math.min(100, Math.round((rawStrain / 130) * 100))
-}
+  if (activePoints === 0) return 0
+
+  // Ya no usamos divisor de 60, rawStrain acumula directamente puntos porcentuales
+  return Math.min(100, Math.round(rawStrain))
+}

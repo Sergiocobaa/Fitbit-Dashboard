@@ -1538,3 +1538,225 @@ button {
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+
+/* ══════════════════════════════════════
+   HEALTH MONITOR PAGE
+   ══════════════════════════════════════ */
+
+.hm-header {
+  padding: 20px 0 16px;
+}
+
+.hm-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+
+.hm-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hm-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.hm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hm-metric-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hm-metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hm-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.hm-metric-value {
+  margin-top: 4px;
+}
+
+.hm-metric-number {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+
+.hm-metric-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.hm-shimmer {
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  animation: pulse 1.4s ease infinite;
+  margin-top: 4px;
+}
+
+/* ══════════════════════════════════════
+   TRENDS PAGE
+   ══════════════════════════════════════ */
+
+.trends-header {
+  padding: 20px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.trends-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+
+.trends-period-tabs {
+  display: flex;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.trends-period-btn {
+  padding: 5px 12px;
+  border-radius: 16px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  font-family: inherit;
+}
+
+.trends-period-btn.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.trends-metric-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.trends-metric-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  font-family: inherit;
+}
+
+.trends-metric-btn.active {
+  background: rgba(255,255,255,0.04);
+}
+
+.trends-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.trends-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.trends-stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+
+.trends-stat-unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.trends-stat-delta {
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.trends-chart-wrap {
+  margin-bottom: 12px;
+  padding: 16px 8px 8px;
+}
+
+/* ── Insight card semanal (badge SEMANA) ── */
+
+.weekly-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(139, 127, 212, 0.2);
+  color: var(--purple);
+  border: 1px solid rgba(139, 127, 212, 0.3);
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ── Padding bottom ajuste para 3 tabs ── */
+.app {
+  padding-bottom: 100px;
+}
