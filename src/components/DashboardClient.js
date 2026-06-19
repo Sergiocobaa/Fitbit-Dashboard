@@ -587,48 +587,73 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {/* ── MY DAY ── */}
+        {/* ── MY DAY (Grid 2x2) ── */}
         {!isLoading && (
           <div className="my-day-section">
             <div className="section-header">
               <h2 className="section-heading">Mi Día</h2>
             </div>
-
-            {/* Tarjeta de Estrés */}
-            {data?.dailyStress?.score != null && (
-              <div 
-                className="card" 
-                style={{ marginBottom: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}
-                onClick={() => router.push('/stress')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <ScoreRing 
-                    score={data.dailyStress.score} 
-                    size={46} 
-                    strokeWidth={4.5} 
-                    color={data.dailyStress.score < 33 ? '#34c759' : data.dailyStress.score < 66 ? '#ffcc00' : '#ff3b30'} 
-                    fontSize={15} 
-                    fontWeight={800} 
-                  />
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '0.02em', marginBottom: 2 }}>Estrés</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#8e8e93' }}>
-                      {data.dailyStress.score < 33 ? 'Bajo' : data.dailyStress.score < 66 ? 'Medio' : 'Alto'}
-                    </div>
-                  </div>
+            
+            <div className="hm-grid">
+              {/* Heart rate card */}
+              <div className="card hm-metric-card" style={{ padding: '12px', cursor: 'pointer' }}>
+                <div style={{ color: '#8e8e93', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 0C1.46 6.7 1.33 10.28 4 13l8 8 8-8c2.67-2.72 2.54-6.3.42-8.42z"></path></svg>
+                  Heart rate
                 </div>
-                <div style={{ color: '#8e8e93' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
+                <div style={{ marginTop: 8, fontSize: 24, fontWeight: 'bold' }}>
+                  {data?.rhr?.bpm || '--'} <span style={{fontSize: 12, fontWeight: 'normal', color: '#8e8e93'}}>bpm resting</span>
                 </div>
               </div>
-            )}
 
-            <div className="card">
+              {/* Steps card */}
+              <div className="card hm-metric-card" style={{ padding: '12px' }}>
+                <div style={{ color: '#8e8e93', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 4v16"/><path d="M17 4v16"/><path d="M19 8H5"/><path d="M19 16H5"/></svg>
+                  Steps
+                </div>
+                <div style={{ marginTop: 8, fontSize: 24, fontWeight: 'bold' }}>
+                  {data?.steps?.toLocaleString() || '--'}
+                </div>
+              </div>
+
+              {/* Zone minutes */}
+              <div className="card hm-metric-card" style={{ padding: '12px' }}>
+                <div style={{ color: '#8e8e93', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  Zone minutes
+                </div>
+                <div style={{ marginTop: 8, fontSize: 24, fontWeight: 'bold' }}>
+                  {data?.zoneMinutes || 0} <span style={{fontSize: 12, fontWeight: 'normal', color: '#8e8e93'}}>min</span>
+                </div>
+              </div>
+
+              {/* Stress */}
+              <div className="card hm-metric-card" style={{ padding: '12px', cursor: 'pointer' }} onClick={() => router.push('/stress')}>
+                <div style={{ color: '#8e8e93', fontSize: 11, fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    Stress
+                  </div>
+                  <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 4px', borderRadius: 4, fontSize: 9 }}>EST</span>
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                  <ScoreRing 
+                    score={data?.dailyStress?.score || 0} 
+                    size={48} 
+                    strokeWidth={4.5} 
+                    color={data?.dailyStress?.score < 33 ? '#34c759' : data?.dailyStress?.score < 66 ? '#ffcc00' : '#ff3b30'} 
+                    fontSize={14} 
+                    fontWeight={800} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginTop: 16 }}>
               <div className="activities-inner-label">Actividades de hoy</div>
 
-              {sleep ? (
+              {sleep && (
                 <div className="activity-row">
                   <div className="activity-time-pill">
                     <span>🌙</span>
@@ -640,9 +665,32 @@ export default function DashboardClient() {
                     <span>{fmtTime(sleep.endTime)}</span>
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {(data?.workouts || []).map((w, i) => {
+                const startD = new Date()
+                startD.setHours(0, w.startMins, 0, 0)
+                const endD = new Date()
+                endD.setHours(0, w.endMins, 0, 0)
+                
+                return (
+                  <div className="activity-row" key={i}>
+                    <div className="activity-time-pill" style={{ backgroundColor: 'rgba(255, 60, 48, 0.15)', color: '#ff3b30' }}>
+                      <span style={{ marginRight: 4 }}>🏃</span>
+                      {w.duration}m
+                    </div>
+                    <span className="activity-name">{w.name} <span style={{ fontSize: 11, color: '#8e8e93', fontWeight: 'normal' }}>({w.avgBpm} bpm)</span></span>
+                    <div className="activity-times-col">
+                      <span>{startD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })}</span>
+                      <span>{endD.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })}</span>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {!sleep && !(data?.workouts?.length > 0) && (
                 <div style={{ color: 'var(--muted)', fontSize: 13, padding: '8px 0' }}>
-                  Sin datos de sueño para este día
+                  Sin actividades hoy
                 </div>
               )}
 

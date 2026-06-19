@@ -2,28 +2,110 @@
 
 import { useEffect, useState } from 'react'
 import { BaselinePill } from './BaselineDelta'
+import { LineChart, Line, YAxis, ResponsiveContainer } from 'recharts'
 
 function todayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' })
 }
 
-function MetricBox({ icon, label, value, unit, pill, loading }) {
+function fmtHM(mins) {
+  if (!mins) return '0m'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function fmtTime(isoStr) {
+  if (!isoStr) return ''
+  return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
+// Hypnogram (Stage Timeline) Component
+function SleepHypnogram({ segments, startTime, endTime }) {
+  if (!segments || !segments.length) return null
+  
+  const totalMs = new Date(endTime).getTime() - new Date(startTime).getTime()
+  
+  const stageColor = {
+    AWAKE: '#ff9f43',
+    REM: '#9c88ff',
+    LIGHT: '#48dbfb',
+    DEEP: '#5f27cd'
+  }
+  const stageHeight = {
+    AWAKE: '100%',
+    REM: '75%',
+    LIGHT: '45%',
+    DEEP: '15%'
+  }
+  
   return (
-    <div className="hm-metric-card">
-      <div className="hm-metric-top">
-        <span className="hm-metric-label">{icon} {label}</span>
+    <div style={{ marginTop: 24, padding: '16px', backgroundColor: '#111', borderRadius: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#8e8e93', letterSpacing: '0.05em', marginBottom: 16 }}>STAGE TIMELINE</div>
+      
+      <div style={{ position: 'relative', height: 100, display: 'flex', alignItems: 'flex-end', borderBottom: '1px dashed #333', paddingBottom: 4 }}>
+        {/* Y-axis labels */}
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: 10, color: '#8e8e93', width: 40, paddingTop: 4, paddingBottom: 4 }}>
+          <span style={{ color: stageColor.AWAKE }}>Awake</span>
+          <span style={{ color: stageColor.REM }}>REM</span>
+          <span style={{ color: stageColor.LIGHT }}>Light</span>
+          <span style={{ color: stageColor.DEEP }}>Deep</span>
+        </div>
+        
+        {/* Bars */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', height: '100%', width: '100%', marginLeft: 44 }}>
+          {segments.map((seg, i) => {
+            const ms = new Date(seg.end).getTime() - new Date(seg.start).getTime()
+            const pct = (ms / totalMs) * 100
+            return (
+              <div key={i} style={{
+                width: `${pct}%`,
+                height: stageHeight[seg.type] || '0%',
+                backgroundColor: stageColor[seg.type] || '#555',
+                borderTopLeftRadius: 2,
+                borderTopRightRadius: 2,
+                marginRight: 1
+              }} />
+            )
+          })}
+        </div>
       </div>
-      {loading ? (
-        <div className="hm-shimmer" />
-      ) : (
-        <>
-          <div className="hm-metric-value">
-            <span className="hm-metric-number">{value ?? '--'}</span>
-            {unit && <span className="hm-metric-unit"> {unit}</span>}
-          </div>
-          {pill && <div style={{ marginTop: 8 }}>{pill}</div>}
-        </>
-      )}
+      
+      {/* X-axis labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginLeft: 44, marginTop: 8, fontSize: 10, color: '#8e8e93' }}>
+        <span>{fmtTime(startTime)}</span>
+        <span>{fmtTime(endTime)}</span>
+      </div>
+    </div>
+  )
+}
+
+// Progress Bar for Sleep Stages
+function StageBar({ label, mins, totalMins, color, healthyMin, healthyMax }) {
+  const pct = totalMins > 0 ? Math.round((mins / totalMins) * 100) : 0
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>
+          {/* Custom SVG ring icon representing the stage */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" style={{ marginRight: 8 }}>
+            <circle cx="12" cy="12" r="9" opacity="0.3" />
+            <path d="M12 3 A9 9 0 0 1 21 12" />
+          </svg>
+          {label} <span style={{ color: color, marginLeft: 6 }}>{pct}%</span>
+        </div>
+        <div style={{ color: '#fff', fontSize: 14 }}>{fmtHM(mins)}</div>
+      </div>
+      <div style={{ position: 'relative', height: 12, backgroundColor: '#222', borderRadius: 6, overflow: 'hidden' }}>
+        {/* Healthy Range Area */}
+        <div style={{ position: 'absolute', left: `${healthyMin}%`, width: `${healthyMax - healthyMin}%`, height: '100%', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+        {/* Striped Healthy Range border */}
+        <div style={{ position: 'absolute', left: `${healthyMin}%`, height: '100%', borderLeft: '2px solid #444' }} />
+        <div style={{ position: 'absolute', left: `${healthyMax}%`, height: '100%', borderLeft: '2px solid #444' }} />
+        
+        {/* Actual Value Bar */}
+        <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 6 }} />
+      </div>
     </div>
   )
 }
@@ -45,195 +127,90 @@ export default function HealthMonitorClient() {
       .finally(() => setLoading(false))
   }, [])
 
-  const sleep = data?.sleep
-  const hrv = data?.hrv
-  const rhr = data?.rhr
-  const baseline = data?.readiness?.baseline
-
-  // Estimar respiratory rate y SpO2 (Fitbit no siempre expone estos via Health API)
-  // Mostramos "--" si no están disponibles, con nota
-  const metrics = [
-    {
-      icon: '🫁',
-      label: 'FRECUENCIA RESPIRATORIA',
-      value: null, // Fitbit no expone este dato via Google Health API v4
-      unit: 'resp/min',
-      pill: null,
-      note: 'No disponible via API',
-    },
-    {
-      icon: '🩸',
-      label: 'OXÍGENO EN SANGRE (SPO2)',
-      value: null, // Similar — requiere otro endpoint
-      unit: '%',
-      pill: null,
-      note: 'No disponible via API',
-    },
-    {
-      icon: '❤️',
-      label: 'FC NOCTURNA',
-      value: rhr?.bpm,
-      unit: 'bpm',
-      pill: baseline?.rhrMean
-        ? <BaselinePill value={rhr?.bpm} baseline={baseline.rhrMean} higherIsBetter={false} />
-        : null,
-    },
-    {
-      icon: '📈',
-      label: 'HRV (VARIABILIDAD)',
-      value: hrv?.avgHRV,
-      unit: 'ms',
-      pill: baseline?.hrvMean
-        ? <BaselinePill value={hrv?.avgHRV} baseline={baseline.hrvMean} higherIsBetter={true} />
-        : null,
-    },
-  ]
-
-  // Sueño profundo y REM como métricas extra
-  const sleepMetrics = [
-    {
-      icon: '🌙',
-      label: 'SUEÑO TOTAL',
-      value: sleep?.minutesAsleep
-        ? `${Math.floor(sleep.minutesAsleep / 60)}h ${sleep.minutesAsleep % 60}m`
-        : null,
-      unit: '',
-      pill: baseline?.sleepMeanMin
-        ? <BaselinePill value={sleep?.minutesAsleep} baseline={baseline.sleepMeanMin} higherIsBetter={true} label={`Tu media: ${Math.floor(baseline.sleepMeanMin / 60)}h ${Math.round(baseline.sleepMeanMin % 60)}m`} />
-        : null,
-    },
-    {
-      icon: '🌊',
-      label: 'SUEÑO PROFUNDO',
-      value: sleep?.deep
-        ? `${Math.floor(sleep.deep / 60)}h ${sleep.deep % 60}m`
-        : null,
-      unit: '',
-      pill: sleep?.minutesAsleep && sleep?.deep
-        ? <BaselinePill
-            value={Math.round((sleep.deep / sleep.minutesAsleep) * 100)}
-            baseline={20}
-            higherIsBetter={true}
-            label={`${Math.round((sleep.deep / sleep.minutesAsleep) * 100)}% del total`}
-          />
-        : null,
-    },
-    {
-      icon: '👁️',
-      label: 'SUEÑO REM',
-      value: sleep?.rem
-        ? `${Math.floor(sleep.rem / 60)}h ${sleep.rem % 60}m`
-        : null,
-      unit: '',
-      pill: sleep?.minutesAsleep && sleep?.rem
-        ? <BaselinePill
-            value={Math.round((sleep.rem / sleep.minutesAsleep) * 100)}
-            baseline={22}
-            higherIsBetter={true}
-            label={`${Math.round((sleep.rem / sleep.minutesAsleep) * 100)}% del total`}
-          />
-        : null,
-    },
-    {
-      icon: '⏰',
-      label: 'TIEMPO DESPIERTO',
-      value: sleep?.minutesAwake != null ? `${sleep.minutesAwake}m` : null,
-      unit: '',
-      pill: sleep?.minutesAwake != null
-        ? <BaselinePill
-            value={sleep.minutesAwake}
-            baseline={15}
-            higherIsBetter={false}
-            label={sleep.minutesAwake <= 15 ? 'Normal' : sleep.minutesAwake <= 30 ? 'Algo elevado' : 'Elevado'}
-          />
-        : null,
-    },
-  ]
-
   if (error) {
     return (
       <main className="app">
         <div className="hm-header">
-          <h1 className="hm-title">HEALTH MONITOR</h1>
+          <h1 className="hm-title">SLEEP</h1>
         </div>
         <div className="error-box">Error cargando datos: {error}</div>
       </main>
     )
   }
 
+  const sleep = data?.sleep
+  const heartRate = data?.heartRate
+
+  // Prepara datos de FC para la gráfica (solo durante el sueño)
+  const hrData = []
+  if (sleep && heartRate) {
+    const dStr = todayStr()
+    heartRate.forEach(hr => {
+      const d = new Date(dStr + 'T00:00:00+02:00')
+      d.setMinutes(hr.mins)
+      if (d >= new Date(sleep.startTime) && d <= new Date(sleep.endTime)) {
+        hrData.push({ time: hr.mins, bpm: hr.bpm })
+      }
+    })
+  }
+
+  const totalSleepMins = sleep ? (sleep.minutesAsleep + sleep.minutesAwake) : 0
+
   return (
     <main className="app">
-      {/* Header */}
-      <div className="hm-header">
-        <h1 className="hm-title">HEALTH MONITOR</h1>
-        <p className="hm-subtitle">Métricas capturadas durante tu sueño de anoche</p>
+      <div className="hm-header" style={{ paddingBottom: 16 }}>
+        <h1 className="hm-title">LAST NIGHT'S SLEEP</h1>
+        <p className="hm-subtitle" style={{ fontSize: 13 }}>
+          {sleep ? `${fmtHM(sleep.minutesAsleep)} in bed` : 'Cargando datos...'}
+        </p>
       </div>
 
-      {/* Grid principal 2×2 — métricas cardíacas */}
-      <section style={{ marginBottom: 16 }}>
-        <div className="hm-section-label">CARDÍACO & HRV</div>
-        <div className="hm-grid">
-          {metrics.map((m, i) => (
-            <MetricBox
-              key={i}
-              icon={m.icon}
-              label={m.label}
-              value={m.note ? m.note : m.value}
-              unit={m.note ? '' : m.unit}
-              pill={m.pill}
-              loading={loading && !m.note}
-            />
-          ))}
-        </div>
-      </section>
+      {!loading && sleep ? (
+        <div className="card" style={{ padding: '24px 16px' }}>
+          
+          {/* Heart Rate Graph */}
+          {hrData.length > 0 && (
+            <div style={{ height: 120, marginBottom: 32, borderBottom: '1px dashed #333', paddingBottom: 16 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={hrData}>
+                  <YAxis domain={['dataMin - 5', 'dataMax + 5']} hide />
+                  <Line type="monotone" dataKey="bpm" stroke="#ff4757" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#8e8e93', marginTop: 8 }}>
+                <span>{fmtTime(sleep.startTime)}</span>
+                <span>{fmtTime(sleep.endTime)}</span>
+              </div>
+            </div>
+          )}
 
-      {/* Grid sueño 2×2 */}
-      <section style={{ marginBottom: 16 }}>
-        <div className="hm-section-label">SUEÑO DE ANOCHE</div>
-        <div className="hm-grid">
-          {sleepMetrics.map((m, i) => (
-            <MetricBox
-              key={i}
-              icon={m.icon}
-              label={m.label}
-              value={m.value}
-              unit={m.unit}
-              pill={m.pill}
-              loading={loading}
-            />
-          ))}
-        </div>
-      </section>
+          {/* Sleep Stages Bars */}
+          <StageBar label="Awake" mins={sleep.minutesAwake} totalMins={totalSleepMins} color="#ff9f43" healthyMin={5} healthyMax={15} />
+          <StageBar label="Light" mins={sleep.light} totalMins={totalSleepMins} color="#48dbfb" healthyMin={45} healthyMax={65} />
+          <StageBar label="Deep (SWS)" mins={sleep.deep} totalMins={totalSleepMins} color="#5f27cd" healthyMin={15} healthyMax={25} />
+          <StageBar label="REM" mins={sleep.rem} totalMins={totalSleepMins} color="#9c88ff" healthyMin={20} healthyMax={25} />
 
-      {/* About section */}
-      <section className="card" style={{ marginTop: 8 }}>
-        <div className="hm-section-label" style={{ marginBottom: 10 }}>SOBRE HEALTH MONITOR</div>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.6 }}>
-          Health Monitor muestra las lecturas capturadas durante tu ventana de sueño nocturno. 
-          Úsalo para comprobar cómo se recuperó tu cuerpo antes de compararlo con tus lecturas diurnas. 
-          La FC en reposo, la variabilidad cardíaca y la calidad del sueño son más útiles cuando se 
-          comparan con tu propio baseline personal de los últimos 30 días.
-        </p>
-        {baseline && (
-          <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {baseline.hrvMean && (
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                HRV media 30d: <strong style={{ color: 'var(--text)' }}>{baseline.hrvMean} ms</strong>
-              </div>
-            )}
-            {baseline.rhrMean && (
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                FC reposo media: <strong style={{ color: 'var(--text)' }}>{baseline.rhrMean} bpm</strong>
-              </div>
-            )}
-            {baseline.sleepMeanMin && (
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                Sueño medio: <strong style={{ color: 'var(--text)' }}>{Math.floor(baseline.sleepMeanMin / 60)}h {Math.round(baseline.sleepMeanMin % 60)}m</strong>
-              </div>
-            )}
+          <div style={{ fontSize: 11, color: '#8e8e93', display: 'flex', alignItems: 'center', marginTop: 24, justifyContent: 'center' }}>
+            <span style={{ display: 'inline-block', width: 16, height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderLeft: '2px solid #444', borderRight: '2px solid #444', marginRight: 8 }} />
+            Healthy range
           </div>
-        )}
-      </section>
+
+          {/* Hypnogram */}
+          {sleep.segments && sleep.segments.length > 0 && (
+             <SleepHypnogram segments={sleep.segments} startTime={sleep.startTime} endTime={sleep.endTime} />
+          )}
+
+        </div>
+      ) : (
+        <div style={{ padding: 20 }}>
+          {loading ? (
+             <div className="hm-shimmer" style={{ height: 300, borderRadius: 16 }} />
+          ) : (
+             <div style={{ color: '#8e8e93', textAlign: 'center' }}>No sleep data available for last night.</div>
+          )}
+        </div>
+      )}
+      
     </main>
   )
 }

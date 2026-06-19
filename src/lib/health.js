@@ -115,6 +115,20 @@ export async function getRHRForDate(token, dateStr, fresh = false) {
   return { bpm: parseInt(point.dailyRestingHeartRate.beatsPerMinute) }
 }
 
+export async function getStepsForDate(token, dateStr, fresh = false) {
+  // Intentamos obtener pasos del data type diario o por defecto a 0
+  try {
+    const data = await healthFetch(
+      `/dataTypes/daily-step-count/dataPoints?filter=daily_step_count.date >= "${dateStr}"`,
+      token, fresh
+    )
+    const point = (data.dataPoints || []).find(p => pointDate(p.dailyStepCount?.date) === dateStr)
+    return point ? parseInt(point.dailyStepCount.count) : 0
+  } catch (e) {
+    return null
+  }
+}
+
 // FC intradiaria muestreada en cubos de 15 min: [{ mins, bpm }] con mins desde medianoche (Madrid)
 export async function getHeartRateSeries(token, dateStr, fresh = false) {
   const off = madridOffset(dateStr)
@@ -328,8 +342,52 @@ export async function getDayData(token, dateStr, fresh = false) {
   const sleepRecovery = calcSleepRecovery({ sleep, hrv, rhr, heartRate, baseline })
   const dailyStrain = calcDailyStrain({ heartRate, rhr, age: 20, sleep })
   const dailyStress = calcDailyStress({ heartRate, rhr, sleep })
+  const steps = await getStepsForDate(token, dateStr, fresh)
+  
+  // Calcular Zone Minutes (Moderate x1 + Vigorous x2) y auto-detectar entrenamientos
+  let zoneMinutes = 0
+  const workouts = []
+  
+  if (heartRate && rhr) {
+    const hrReserve = 194 - rhr.bpm
+    let currentWorkout = null
+
+    for (const { bpm, mins } of heartRate) {
+      const pct = (bpm - rhr.bpm) / hrReserve
+      
+      // Zone minutes
+      if (pct >= 0.40 && pct < 0.60) zoneMinutes += 15 // Moderate
+      else if (pct >= 0.60) zoneMinutes += 30 // Vigorous (2x)
+
+      // Workout detection (>50% reserve is ~130bpm)
+      if (pct >= 0.45) {
+        if (!currentWorkout) {
+          currentWorkout = { startMins: mins, maxBpm: bpm, totalBpm: bpm, count: 1 }
+        } else {
+          currentWorkout.maxBpm = Math.max(currentWorkout.maxBpm, bpm)
+          currentWorkout.totalBpm += bpm
+          currentWorkout.count++
+        }
+      } else {
+        if (currentWorkout) {
+          const duration = mins - currentWorkout.startMins
+          if (duration >= 15) {
+            workouts.push({
+              name: duration >= 45 ? 'Deporte' : 'Actividad',
+              duration,
+              startMins: currentWorkout.startMins,
+              endMins: mins,
+              avgBpm: Math.round(currentWorkout.totalBpm / currentWorkout.count),
+              maxBpm: currentWorkout.maxBpm
+            })
+          }
+          currentWorkout = null
+        }
+      }
+    }
+  }
  
-  return { sleep, hrv, rhr, heartRate, readiness, sleepRecovery, dailyStrain, dailyStress, baseline }
+  return { sleep, hrv, rhr, heartRate, readiness, sleepRecovery, dailyStrain, dailyStress, baseline, steps, zoneMinutes, workouts }
 }
 
 // Scores de los últimos 7 días (incluido hoy) para el selector de días
